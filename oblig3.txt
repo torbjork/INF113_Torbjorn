@@ -1,0 +1,707 @@
+Oppgave 1
+
+A search for "foo.txt" in the xxd dump of the disk returns two results:
+
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113# grep "foo.txt" oblig3dump
+
+00044030: 1000 0701 666f 6f2e 7478 7400 0d00 0000  ....foo.txt.....
+00161100: 2e2e 2e66 6f6f 2e74 7874 2e2e 2e2e 2e0a  ...foo.txt......
+
+using less oblig3dump and scrolling to the first location, we find:
+
+00044010: 0c00 0202 2e2e 0000 0b00 0000 1400 0a02  ................
+00044020: 6c6f 7374 2b66 6f75 6e64 0000 0c00 0000  lost+found......
+00044030: 1000 0701 666f 6f2e 7478 7400 0d00 0000  ....foo.txt.....
+00044040: 1000 0701 6261 722e 7478 7400 0f00 0000  ....bar.txt.....
+00044050: 1000 0701 6261 7a2e 7478 7400 0f00 0000  ....baz.txt.....
+00044060: 1000 0601 6261 7a5f 686c 0000 1000 0000  ....baz_hl......
+00044070: 1000 0607 6261 7a5f 736c 0000 1100 0000  ....baz_sl......
+00044080: 0c00 0402 6469 7231 1500 0000 780f 0a01  ....dir1....x...
+00044090: 6f62 6c69 6733 6475 6d70 0000 0000 0000  oblig3dump......
+
+In line 17411 of the file, at 00044020 we find the inode number 12 which points to foo.txt.
+
+using the regular stat command in the terminal reveals some information about the file:
+
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113/oblig3# stat foo.txt
+  File: foo.txt
+  Size: 0         	Blocks: 0          IO Block: 4096   regular empty file
+Device: 810h/2064d	Inode: 12          Links: 1
+Access: (0644/-rw-r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 2023-10-26 12:56:10.306373151 +0200
+Modify: 2023-10-26 12:56:10.306373151 +0200
+Change: 2023-10-26 12:56:10.306373151 +0200
+ Birth: 2023-10-26 12:56:10.306373151 +0200
+
+We can see here that inode 12 describes the file foo.txt.
+
+Then run debugfs imap on the file:
+
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113# debugfs /dev/sdb
+debugfs 1.46.5 (30-Dec-2021)
+debugfs:  imap foo.txt
+Inode 12 is part of block group 0
+	located at block 4, offset 0x0b00
+(as expected)
+
+Run imap / to find out the inode of the current directory (where the name of foo.txt is stored):
+debugfs:  imap /
+Inode 2 is part of block group 0
+	located at block 4, offset 0x0100
+
+Run stat / :
+
+Inode: 2   Type: directory    Mode:  0755   Flags: 0x0
+Generation: 0    Version: 0x00000000:0000000a
+User:     0   Group:     0   Project:     0   Size: 4096
+File ACL: 0
+Links: 4   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x654133fe:0ac9d28c -- Tue Oct 31 18:06:06 2023
+ atime: 0x654130d4:6808433c -- Tue Oct 31 17:52:36 2023
+ mtime: 0x654133fe:0ac9d28c -- Tue Oct 31 18:06:06 2023
+crtime: 0x653a4598:00000000 -- Thu Oct 26 12:55:20 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):68
+TOTAL: 1
+
+So now we see that the directory inode (2) points to block 68.
+
+Run bd on block 68:
+
+debugfs:  bd 68
+0000  0200 0000 0c00 0102 2e00 0000 0200 0000  ................
+0020  0c00 0202 2e2e 0000 0b00 0000 1400 0a02  ................
+0040  6c6f 7374 2b66 6f75 6e64 0000 0c00 0000  lost+found......	<-- Inode 12 belongs to foo.txt
+0060  1000 0701 666f 6f2e 7478 7400 0d00 0000  ....foo.txt..... <-- Here we find the name of foo.txt.
+0100  1000 0701 6261 722e 7478 7400 0f00 0000  ....bar.txt.....
+0120  1000 0701 6261 7a2e 7478 7400 0f00 0000  ....baz.txt.....
+0140  1000 0601 6261 7a5f 686c 0000 1000 0000  ....baz_hl......
+0160  1000 0607 6261 7a5f 736c 0000 1100 0000  ....baz_sl......
+0200  0c00 0402 6469 7231 1500 0000 780f 0a01  ....dir1....x...
+0220  6f62 6c69 6733 6475 6d70 0000 0000 0000  oblig3dump......
+0240  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+
+Running debugfs stat on the file:
+
+Inode: 12   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 3818796903    Version: 0x00000000:00000002
+User:     0   Group:     0   Project:     0   Size: 0
+File ACL: 0
+Links: 1   Blockcount: 0
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+ atime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+ mtime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+crtime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+Size of extra inode fields: 32
+BLOCKS:
+
+The information here indicates that the inode doesn't point to any data blocks, which is of course because the file is empty.
+
+Oppgave 2
+
+Blockdump of block 68 already shows the names of the file bar.txt:
+debugfs:  bd 68
+0000  0200 0000 0c00 0102 2e00 0000 0200 0000  ................
+0020  0c00 0202 2e2e 0000 0b00 0000 1400 0a02  ................
+0040  6c6f 7374 2b66 6f75 6e64 0000 0c00 0000  lost+found......
+0060  1000 0701 666f 6f2e 7478 7400 0d00 0000  ....foo.txt..... <--inode 13 belongs to bar.txt
+0100  1000 0701 6261 722e 7478 7400 0f00 0000  ....bar.txt..... <--name of bar.txt
+0120  1000 0701 6261 7a2e 7478 7400 0f00 0000  ....baz.txt.....
+0140  1000 0601 6261 7a5f 686c 0000 1000 0000  ....baz_hl......
+0160  1000 0607 6261 7a5f 736c 0000 1100 0000  ....baz_sl......
+0200  0c00 0402 6469 7231 1500 0000 780f 0a01  ....dir1....x...
+0220  6f62 6c69 6733 6475 6d70 0000 0000 0000  oblig3dump......
+0240  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+debugfs stat bar.txt:
+Inode: 13   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 1837484868    Version: 0x00000000:00000001
+User:     0   Group:     0   Project:     0   Size: 110
+File ACL: 0
+Links: 1   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a478b:89d6cd14 -- Thu Oct 26 13:03:39 2023
+ atime: 0x653a478f:affc3adc -- Thu Oct 26 13:03:43 2023
+ mtime: 0x653a478b:89d6cd14 -- Thu Oct 26 13:03:39 2023
+crtime: 0x653a478b:89d6cd14 -- Thu Oct 26 13:03:39 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):512
+TOTAL: 1
+
+Inode 13 points to datablock 512.
+
+debugfs:  bd 512
+0000  4163 636f 7264 696e 6720 746f 2074 6865  According to the
+0020  204e 6174 696f 6e61 6c20 5265 7461 696c   National Retail
+0040  2046 6564 6572 6174 696f 6e2c 2041 6d65   Federation, Ame
+0060  7269 6361 6e73 2061 7265 2065 7870 6563  ricans are expec
+0100  7465 6420 746f 2073 7065 6e64 2032 2e32  ted to spend 2.2
+0120  2062 696c 6c69 6f6e 206f 6e20 4861 6c6c   billion on Hall
+0140  6f77 6565 6e20 696e 2032 3032 330a 0000  oween in 2023...
+0160  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+So in block 512 we find the content of the file bar.txt.
+
+
+Finding qux.txt:
+
+We can take a look at the directory where the file is saved:
+
+debugfs stat /dir1:
+Inode: 17   Type: directory    Mode:  0755   Flags: 0x0
+Generation: 1229947943    Version: 0x00000000:00000003
+User:     0   Group:     0   Project:     0   Size: 4096
+File ACL: 0
+Links: 3   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a49fa:775e6158 -- Thu Oct 26 13:14:02 2023
+ atime: 0x654130d4:894f6410 -- Tue Oct 31 17:52:36 2023
+ mtime: 0x653a49fa:775e6158 -- Thu Oct 26 13:14:02 2023
+crtime: 0x653a4832:668523dc -- Thu Oct 26 13:06:26 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):75
+TOTAL: 1
+
+We see that dir1's inode 17 points to block 75, so we do a block dump:
+debugfs:  bd 75
+0000  1100 0000 0c00 0102 2e00 0000 0200 0000  ................
+0020  0c00 0202 2e2e 0000 0e00 0000 1000 0701  ................
+0040  7175 782e 7478 7400 1200 0000 d80f 0402  qux.txt......... <-- name of qux.txt
+0060  6469 7232 0000 0000 0000 0000 0000 0000  dir2............
+0100  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+Here we see the name of qux.txt stored in block 75. 
+
+stat qux.txt provides us with the inode number for qux.txt:
+
+Inode: 14   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 3255222872    Version: 0x00000000:00000001
+User:     0   Group:     0   Project:     0   Size: 110
+File ACL: 0
+Links: 1   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a49df:0c9c3e10 -- Thu Oct 26 13:13:35 2023
+ atime: 0x653a49e6:9f761130 -- Thu Oct 26 13:13:42 2023
+ mtime: 0x653a49df:0c9c3e10 -- Thu Oct 26 13:13:35 2023
+crtime: 0x653a49df:0c9c3e10 -- Thu Oct 26 13:13:35 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):133
+TOTAL: 1
+
+The inode number is 14, and the inode points to datablock 133.
+Blockdump 133:
+debugfs:  bd 133
+0000  5468 6520 6d6f 7374 2070 6f70 756c 6172  The most popular
+0020  2063 6f73 7475 6d65 7320 666f 7220 7065   costumes for pe
+0040  7473 2061 7265 2074 6865 2070 756d 706b  ts are the pumpk
+0060  696e 2c20 666f 6c6c 6f77 6564 2062 7920  in, followed by 
+0100  7468 6520 686f 7420 646f 672c 2061 6e64  the hot dog, and
+0120  2074 6865 2062 756d 626c 6562 6565 2069   the bumblebee i
+0140  6e20 7468 6972 6420 706c 6163 650a 0000  n third place...
+0160  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+Which is indeed the content of the file.
+
+The file quux.txt is in directory dir2. We can find it, like the others, with grep.
+
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113/oblig3# grep "quux.txt" oblig3dump
+0004c020: 7175 7578 2e74 7874 1400 0000 d80f 0402  quux.txt........
+
+Taking a look in the neighborhood again:
+0004c010: 0c00 0202 2e2e 0000 1300 0000 1000 0801  ................
+0004c020: 7175 7578 2e74 7874 1400 0000 d80f 0402  quux.txt........
+0004c030: 6469 7233 0000 0000 0000 0000 0000 0000  dir3............
+0004c040: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+
+debugfs stat dir2:
+
+Inode: 18   Type: directory    Mode:  0755   Flags: 0x0
+Generation: 3127121569    Version: 0x00000000:00000003
+User:     0   Group:     0   Project:     0   Size: 4096
+File ACL: 0
+Links: 3   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a4cb6:645d7bfc -- Thu Oct 26 13:25:42 2023
+ atime: 0x654130d4:894f6410 -- Tue Oct 31 17:52:36 2023
+ mtime: 0x653a4cb6:645d7bfc -- Thu Oct 26 13:25:42 2023
+crtime: 0x653a49fa:775e6158 -- Thu Oct 26 13:14:02 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):76
+TOTAL: 1
+
+The inode (18) of dir2 points to datablock 76:
+debugfs:  bd 76
+0000  1200 0000 0c00 0102 2e00 0000 1100 0000  ................
+0020  0c00 0202 2e2e 0000 1300 0000 1000 0801  ................ <-- inode # 13 (dec 19)
+0040  7175 7578 2e74 7874 1400 0000 d80f 0402  quux.txt........ <-- name of quux.txt
+0060  6469 7233 0000 0000 0000 0000 0000 0000  dir3............
+0100  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+debugfs stat quux.txt:
+Inode: 19   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 764587942    Version: 0x00000000:00000001
+User:     0   Group:     0   Project:     0   Size: 82
+File ACL: 0
+Links: 1   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a4ca4:87aaa1b4 -- Thu Oct 26 13:25:24 2023
+ atime: 0x653a4ca4:87aaa1b4 -- Thu Oct 26 13:25:24 2023
+ mtime: 0x653a4ca4:87aaa1b4 -- Thu Oct 26 13:25:24 2023
+crtime: 0x653a4ca4:87aaa1b4 -- Thu Oct 26 13:25:24 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):529
+TOTAL: 1
+
+(END)
+
+The inode of the file is 19, and points to data block 529.
+debugfs:  bd 529
+0000  4772 6573 736b 6172 6c79 6b74 6572 2065  Gresskarlykter e
+0020  7220 6c79 6b74 6572 206c 6167 6574 2061  r lykter laget a
+0040  7620 7574 6875 6c65 6465 2067 7265 7373  v uthulede gress
+0060  6b61 7220 6f67 2066 6f72 6d65 7420 736f  kar og formet so
+0100  6d20 736b 756d 6c65 2061 6e73 696b 7465  m skumle ansikte
+0120  720a 0000 0000 0000 0000 0000 0000 0000  r...............
+0140  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+Which is the content of the file.
+
+Oppgave 3
+Start with running debugfs stat baz.txt:
+
+Inode: 15   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 3207849940    Version: 0x00000000:00000003
+User:     0   Group:     0   Project:     0   Size: 148481
+File ACL: 0
+Links: 2   Blockcount: 304
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a47fb:072a033c -- Thu Oct 26 13:05:31 2023
+ atime: 0x65429ed5:6b8ebe64 -- Wed Nov  1 19:54:13 2023
+ mtime: 0x653a47ca:1b3374d4 -- Thu Oct 26 13:04:42 2023
+crtime: 0x653a47ca:157a9d24 -- Thu Oct 26 13:04:42 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0-11):513-524, (IND):74, (12-15):525-528, (16-36):112-132
+TOTAL: 38
+
+(END)
+
+So inode number is 15, and the file uses 38 data blocks (unsurprisingly, since 38*4096 = 156,648 which accommodates the file size of 150kb) starting with 513-524.
+In block 513 we can read the start of Lewis Carrol's classic "Alice's Adventures in Wonderland":
+
+debugfs:  bd 513
+0000  0a0a 0a0a 2020 2020 2020 2020 2020 2020  ....            
+0020  2020 2020 414c 4943 4527 5320 4144 5645      ALICE'S ADVE
+0040  4e54 5552 4553 2049 4e20 574f 4e44 4552  NTURES IN WONDER
+
+(to read the whole story; debugfs: cat <15>)
+
+The blocks used by the inode can also be found with the "blocks <inode>" command:
+debugfs:  blocks <15>
+513 514 515 516 517 518 519 520 521 522 523 524 74 525 526 527 528 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 
+
+Block 74 is pointed to by the inode's indirect link, and contains pointers to actual data blocks.
+The inodes each can only point to a fixed maximum nuber of data blocks, which would limit the maximum file size to block size times the number of available direct pointers in an inode (for instance 4096 bytes * 12 pointers = 48kb). Since each data block can hold 1024 pointers to data blocks, using an indirect pointer increases max file size to 1024*4096+48 = 4,194,352 bytes (4MB+48KB)
+
+
+debugfs:  inode_dump -b baz.txt
+0000  0102 0000 0202 0000 0302 0000 0402 0000  ................
+0020  0502 0000 0602 0000 0702 0000 0802 0000  ................
+0040  0902 0000 0a02 0000 0b02 0000 0c02 0000  ................
+0060  4a00 0000 0000 0000 0000 0000            J...........
+
+Here we find pointers to some of the data blocks containing parts of the baz.txt file.
+
+0x0201: 513 
+0x0202: 514
+0x0302: 515
+0x0204: 516
+0x0205: 517
+0x0206: 518
+0x0207: 519
+0x0208: 520
+0x0209: 521
+0x020a: 522
+0x020b: 523
+0x020c: 524
+0x004a: 74 - also a familiar number from the inode information.
+
+Since the inode only accommodates 12 direct links, to store the larger file the files system uses an indirect link to datablock 74.
+
+debugfs:  bd 74
+0000  0d02 0000 0e02 0000 0f02 0000 1002 0000  ................
+0020  7000 0000 7100 0000 7200 0000 7300 0000  p...q...r...s...
+0040  7400 0000 7500 0000 7600 0000 7700 0000  t...u...v...w...
+0060  7800 0000 7900 0000 7a00 0000 7b00 0000  x...y...z...{...
+0100  7c00 0000 7d00 0000 7e00 0000 7f00 0000  |...}...~.......
+0120  8000 0000 8100 0000 8200 0000 8300 0000  ................
+0140  8400 0000 0000 0000 0000 0000 0000 0000  ................
+0160  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+This data block has pointers to:
+0x020d: 525
+0x020e: 526
+0x020f: 527
+0x0210: 528
+0x0070: 112
+0x0071: 113
+0x0072: 114
+...
+0x0084: 132
+
+Which means we have now found all the pointers, direct and indirect, to the data blocks of the file baz.txt.
+
+Oppgave 4
+We can find where the names of the files are with grep:
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113/oblig3# grep "baz_hl" oblig3dump
+
+00044060: 1000 0601 6261 7a5f 686c 0000 1000 0000  ....baz_hl......
+
+Check the neighborhood and find:
+
+00044020: 6c6f 7374 2b66 6f75 6e64 0000 0c00 0000  lost+found......
+00044030: 1000 0701 666f 6f2e 7478 7400 0d00 0000  ....foo.txt.....
+00044040: 1000 0701 6261 722e 7478 7400 0f00 0000  ....bar.txt..... <-- inode number 15 belongs to baz.txt
+00044050: 1000 0701 6261 7a2e 7478 7400 0f00 0000  ....baz.txt..... <-- ...and also to baz_hl
+00044060: 1000 0601 6261 7a5f 686c 0000 1000 0000  ....baz_hl...... <--...but baz_sl has its own (16)
+00044070: 1000 0607 6261 7a5f 736c 0000 1100 0000  ....baz_sl......
+00044080: 0c00 0402 6469 7231 1500 0000 780f 0a01  ....dir1....x...
+00044090: 6f62 6c69 6733 6475 6d70 0000 0000 0000  oblig3dump......
+
+The hard link baz_hl has the same inode number as baz.txt:
+
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113/oblig3# ls -li gives us this information:
+
+inode number --> 15 -rw-r--r-- 2 root root  148481 okt.  26 13:04 baz_hl  <-- file name
+...
+inode number --> 15 -rw-r--r-- 2 root root  148481 okt.  26 13:04 baz.txt <-- file name
+
+After the inode number and the permission info we can see that there are 2 links associated with this file.
+
+Inode number 15 obviously points to the same data blocks as those used by the file baz.txt:
+
+debugfs:  stat baz_hl
+
+Inode: 15   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 3207849940    Version: 0x00000000:00000003
+User:     0   Group:     0   Project:     0   Size: 148481
+File ACL: 0
+Links: 2   Blockcount: 304
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a47fb:072a033c -- Thu Oct 26 13:05:31 2023
+ atime: 0x65429ed5:6b8ebe64 -- Wed Nov  1 19:54:13 2023
+ mtime: 0x653a47ca:1b3374d4 -- Thu Oct 26 13:04:42 2023
+crtime: 0x653a47ca:157a9d24 -- Thu Oct 26 13:04:42 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0-11):513-524, (IND):74, (12-15):525-528, (16-36):112-132
+TOTAL: 38
+
+(END)
+as we can see, debugfs: stat baz_hl produces the exact same result as debugfs: stat baz.txt.
+
+The file baz_sl, on the other hand, has a different inode number than the file it is pointing to:
+
+--> inode number 16 lrwxrwxrwx 1 root root       7 okt.  26 13:05 baz_sl -> baz.txt <-- special file!
+--> inode number 15 -rw-r--r-- 2 root root  148481 okt.  26 13:04 baz.txt
+
+Inode: 16   Type: symlink    Mode:  0777   Flags: 0x0 	<-- symlink = symbolic link, or "soft link"
+Generation: 225767956    Version: 0x00000000:00000001
+User:     0   Group:     0   Project:     0   Size: 7
+File ACL: 0
+Links: 1   Blockcount: 0				<-- no data blocks!
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a4802:65938cb4 -- Thu Oct 26 13:05:38 2023
+ atime: 0x65429ed4:959e138c -- Wed Nov  1 19:54:12 2023
+ mtime: 0x653a4802:65938cb4 -- Thu Oct 26 13:05:38 2023
+crtime: 0x653a4802:65938cb4 -- Thu Oct 26 13:05:38 2023
+Size of extra inode fields: 32
+Fast link dest: "baz.txt"				<-- the actual file that the soft link points to
+(END)
+
+
+Hard links and soft links both have advantages and drawbacks. A hard link points to the data blocks of the original file, and any change in the original file is reflected in the linked file, and vice versa. Should the original file be deleted, the data is still accessible through the hard link. Since the inode number for the linked file must be the same, hard links cannot be used across different file systems. Also, hard links cannot be used for special files like directories.
+
+Soft links do not point directly to the data blocks, but to the name of the other file which in turn points to the data blocks. This type of link can be used across file systems, since the link points to a name and not an underlying object (https://manpages.ubuntu.com/manpages/focal/en/man7/symlink.7.html#:~:text=A%20symbolic%20link%20that%20refers,itself%20and%20the%20referenced%20object.).
+
+Should the original file be deleted, the situation of the "dangling soft link" (https://www.redhat.com/sysadmin/linking-linux-explained) will occur, which presents the danger that if a new file with the same name is created after the original file was deleted, the link will now point to the newly created file, which contents may be very different from the original.
+
+Oppgave 5
+The inode number of dir1 is 17:
+00044070: 1000 0607 6261 7a5f 736c 0000 1100 0000  ....baz_sl...... <--inode 17 belongs to dir1
+00044080: 0c00 0402 6469 7231 1500 0000 780f 0a01  ....dir1....x...
+
+the inode number and link count can of course also be found with ls -li:
+17 drwxr-xr-x 3 root root    4096 okt.  26 13:14 dir1
+
+debugfs:stat dir 1 shows 3 links:
+
+Inode: 17   Type: directory    Mode:  0755   Flags: 0x0
+Generation: 1229947943    Version: 0x00000000:00000003
+User:     0   Group:     0   Project:     0   Size: 4096
+File ACL: 0
+Links: 3   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a49fa:775e6158 -- Thu Oct 26 13:14:02 2023
+ atime: 0x65460134:0cec4374 -- Sat Nov  4 09:30:44 2023
+ mtime: 0x653a49fa:775e6158 -- Thu Oct 26 13:14:02 2023
+crtime: 0x653a4832:668523dc -- Thu Oct 26 13:06:26 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):75
+TOTAL: 1
+
+(END)
+
+Take a look inside data block 75:
+debugfs:  bd 75 		    
+      1100 = self		    0200 = Parent directory
+0000  1100 0000 0c00 0102 2e00 0000 0200 0000  ................ <-- inode number 17 (0x0011) belongs to dir1 
+0020  0c00 0202 2e2e 0000 0e00 0000 1000 0701  ................ <-- inode number 14 (0x00e0) belongs to qux.txt
+0040  7175 782e 7478 7400 1200 0000 d80f 0402  qux.txt......... <-- inode number 18 (0x0012) belongs to dir2
+0060  6469 7232 0000 0000 0000 0000 0000 0000  dir2............  
+0100  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+dir1 contains the file qux.txt (inode number 14, data block 133) and the directory dir2 (inode number 18, data block 76).
+
+
+debugfs:  bd 76
+      1200 = self		    1100 = parent directory
+0000  1200 0000 0c00 0102 2e00 0000 1100 0000  ................ <-- Reference to inode 17 = dir1
+0020  0c00 0202 2e2e 0000 1300 0000 1000 0801  ................ <-- inode number 19 (0x0013) belongs to quux.txt
+0040  7175 7578 2e74 7874 1400 0000 d80f 0402  quux.txt........ <-- inode number 20 (0x0014) belongs to dir3
+0060  6469 7233 0000 0000 0000 0000 0000 0000  dir3............
+0100  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+dir2 contains the file quux.txt (inode number 19, block 529) and the directory dir3 (inode number 20, block 77)
+
+debugfs:  bd 77
+      1400 = self		    1200 = parent directory
+0000  1400 0000 0c00 0102 2e00 0000 1200 0000  ................ <-- reference to inode 18 = dir2
+0020  f40f 0202 2e2e 0000 0000 0000 0000 0000  ................
+0040  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+dir3 is empty.
+
+Parent directory of dir1 is the root directory (this can be confirmed by issuing commands debugfs: stat . and debugfs stat .. which should produce equal output if we are in the root). It has inode number 2 and information about the files/directories inside is contained in data block 68:
+
+debugfs:  bd 68
+      0200 = self		    0200 = parent. Since parent=self we have come to the root.
+0000  0200 0000 0c00 0102 2e00 0000 0200 0000  ................
+0020  0c00 0202 2e2e 0000 0b00 0000 1400 0a02  ................
+0040  6c6f 7374 2b66 6f75 6e64 0000 0c00 0000  lost+found......
+0060  1000 0701 666f 6f2e 7478 7400 0d00 0000  ....foo.txt.....
+0100  1000 0701 6261 722e 7478 7400 0f00 0000  ....bar.txt.....
+0120  1000 0701 6261 7a2e 7478 7400 0f00 0000  ....baz.txt.....
+0140  1000 0601 6261 7a5f 686c 0000 1000 0000  ....baz_hl......
+0160  1000 0607 6261 7a5f 736c 0000 1100 0000  ....baz_sl...... <-- Inode 17 (0x1100) belongs to dir1
+0200  0c00 0402 6469 7231 1500 0000 780f 0a01  ....dir1....x...
+0220  6f62 6c69 6733 6475 6d70 0000 0000 0000  oblig3dump......
+0240  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+So data block 68, 75, and 76 all contain references to dir1. These data blocks all belong to directories (root, dir1, dir2 respectively) and contain information about the files in each directory. The references are necessary in order to traverse the file system, which can be viewed as a doubly linked tree where the directories are nodes and the files are leaves. Without information about the parent of a directory, it would not be possible to navigate to the root of the file system from a leaf or internal node. (https://stackoverflow.com/questions/322719/why-do-directory-listings-contain-the-current-and-parent-directory)
+
+Oppgave 6
+
+The easiest way to find this information is with debugfs: dump_unused:
+
+debugfs:  dump_unused
+Unused block 134 contains non-zero data:
+topphemmelig informasjon
+
+debugfs:  bd 134
+0000  746f 7070 6865 6d6d 656c 6967 2069 6e66  topphemmelig inf
+0020  6f72 6d61 736a 6f6e 0a00 0000 0000 0000  ormasjon........
+0040  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+
+The word "topphemmelig" can also be found using grep on the xxd dump:
+
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113/oblig3# grep "topphemmelig" oblig3dump
+00086000: 746f 7070 6865 6d6d 656c 6967 2069 6e66  topphemmelig inf
+
+Looking in the file we find:
+00085ff0: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00086000: 746f 7070 6865 6d6d 656c 6967 2069 6e66  topphemmelig inf
+00086010: 6f72 6d61 736a 6f6e 0a00 0000 0000 0000  ormasjon........
+
+Calculating the block number: offset/ block size
+offset = 0x86000 = 548864
+block size = 4096
+(548864 / 4096) = 134
+
+bd 134 on the file system I had been using while working on oppgave 1-5 produced the result below, hex numbers with a zeroes assigned to them, this is because I had overwritten several blocks while making the initial xxd dump (foolishly, to the same disk).
+
+debugfs:  bd 134
+0000  3330 6630 3a20 3030 3030 2030 3030 3020  30f0: 0000 0000 
+0020  3030 3030 2030 3030 3020 3030 3030 2030  0000 0000 0000 0
+0040  3030 3020 3030 3030 2030 3030 3020 202e  000 0000 0000  .
+0060  2e2e 2e2e 2e2e 2e2e 2e2e 2e2e 2e2e 2e0a  ................
+0100  3030 3035 3331 3030 3a20 3030 3030 2030  00053100: 0000 0
+0120  3030 3020 3030 3030 2030 3030 3020 3030  000 0000 0000 00
+0140  3030 2030 3030 3020 3030 3030 2030 3030  00 0000 0000 000
+0160  3020 202e 2e2e 2e2e 2e2e 2e2e 2e2e 2e2e  0  .............
+
+Oppgave 7
+Let's take a look at the information contained inside inode 12 and 13:
+
+debugfs:  imap <13> (inode of bar.txt)
+Inode 13 is part of block group 0
+	located at block 4, offset 0x0c00
+debugfs:  id <13>
+0000  a481 0000 6e00 0000 8f47 3a65 8b47 3a65  ....n....G:e.G:e
+0020  8b47 3a65 0000 0000 0000 0100 0800 0000  .G:e............
+0040  0000 0000 0100 0000 0002 0000 0000 0000  ................
+0060  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+0140  0000 0000 44cb 856d 0000 0000 0000 0000  ....D..m........
+0160  0000 0000 0000 0000 0000 0000 0000 0000  ................
+0200  2000 0000 14cd d689 14cd d689 dc3a fcaf   ............:..
+0220  8b47 3a65 14cd d689 0000 0000 0000 0000  .G:e............
+0240  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+debugfs:  imap <12> (inode of foo.txt)
+Inode 12 is part of block group 0
+	located at block 4, offset 0x0b00
+
+debugfs:  id <12> 
+0000  a481 0000 0000 0000 ca45 3a65 ca45 3a65  .........E:e.E:e
+0020  ca45 3a65 0000 0000 0000 0100 0000 0000  .E:e............
+0040  0000 0000 0200 0000 0000 0000 0000 0000  ................
+0060  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+0140  0000 0000 6737 9ee3 0000 0000 0000 0000  ....g7..........
+0160  0000 0000 0000 0000 0000 0000 0000 0000  ................
+0200  2000 0000 7c88 0b49 7c88 0b49 7c88 0b49   ...|..I|..I|..I
+0220  ca45 3a65 7c88 0b49 0000 0000 0000 0000  .E:e|..I........
+0240  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+For later use while navigating the inode table with GHex:
+
+inode 12 starts at byte 0x4B00.
+inode 13 starts at byte 0x4C00.
+
+six 0s right before the number 0002 (0200 when read little endian = 512) in inode 13. So here we cab  Should be changed in inode 12 from 0000 to 8600 (134).
+
+40 bytes after the start of the inode, the block number appears. (see inode table docs for i_block)
+In inode 13, this number is 00 02, in little endian so it is actually 0x0200 = 512 in decimal. In the corresponding field in inode 12, we need to enter decimal 134 = 0x0086 = 86 00 little endian.
+
+0x4b00 + 40 (dec) = 0x4b28
+
+So the value starting at byte 0x4b28 must be changed from 00 00 to 86 00.
+
+Now in the disk we have:
+Inode: 12   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 3818796903    Version: 0x00000000:00000002
+User:     0   Group:     0   Project:     0   Size: 0
+File ACL: 0
+Links: 1   Blockcount: 0
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+ atime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+ mtime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+crtime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):134
+TOTAL: 1
+
+But cat foo.txt doesn't print the information yet.
+Inode: 13   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 1837484868    Version: 0x00000000:00000001
+User:     0   Group:     0   Project:     0   Size: 110
+File ACL: 0
+Links: 1   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a478b:89d6cd14 -- Thu Oct 26 13:03:39 2023
+ atime: 0x653a478f:affc3adc -- Thu Oct 26 13:03:43 2023
+ mtime: 0x653a478b:89d6cd14 -- Thu Oct 26 13:03:39 2023
+crtime: 0x653a478b:89d6cd14 -- Thu Oct 26 13:03:39 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):512
+TOTAL: 1
+
+Let's update the block count also, so that it's 8, the same as inode 13.
+It is located at the 28th byte offset, so goto byte 4B1C in GHex.
+
+Changed block count to 8:
+
+Inode: 12   Type: regular    Mode:  0644   Flags: 0x0
+Generation: 3818796903    Version: 0x00000000:00000002
+User:     0   Group:     0   Project:     0   Size: 0
+File ACL: 0
+Links: 1   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+ atime: 0x65478f69:a9a89a80 -- Sun Nov  5 13:49:45 2023
+ mtime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+crtime: 0x653a45ca:490b887c -- Thu Oct 26 12:56:10 2023
+Size of extra inode fields: 32
+BLOCKS:
+(0):134
+TOTAL: 1
+
+
+Lastly, we have to fix the size also since it says 0 in inode 12 and as a result cat will not do anything. The size of "topphemmelig informasjon" = 25 = 0x19
+the size of the file (i_size) is stored in the 4th byte inside the inode. so 0x4B00 + 4 = 0x4B04, where we enter 19 00.
+
+After editing i_block, i_blocks, and i_size:
+
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113/oblig3# ls -li
+total 332
+13 -rw-r--r-- 1 root root    110 okt.  26 13:03 bar.txt
+15 -rw-r--r-- 2 root root 148481 okt.  26 13:04 baz_hl
+16 lrwxrwxrwx 1 root root      7 okt.  26 13:05 baz_sl -> baz.txt
+15 -rw-r--r-- 2 root root 148481 okt.  26 13:04 baz.txt
+17 drwxr-xr-x 3 root root   4096 okt.  26 13:14 dir1
+12 -rw-r--r-- 1 root root     25 okt.  26 12:56 foo.txt
+11 drwx------ 2 root root  16384 okt.  26 12:55 lost+found
+root@torbjorn-VirtualBox:/home/torbjorn/INF_113/oblig3# debugfs /dev/sdb
+debugfs 1.46.5 (30-Dec-2021)
+debugfs:  cat <12>
+topphemmelig informasjon
+
+debugfs:  id <12>
+0000  a481 0000 1900 0000 81ad 4765 ca45 3a65  ..........Ge.E:e <--0x0019 = size
+0020  ca45 3a65 0000 0000 0000 0100 0800 0000  .E:e............
+0040  0000 0000 0200 0000 8600 0000 0000 0000  ................ <--0x0086 = data block (134)
+0060  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+0140  0000 0000 6737 9ee3 0000 0000 0000 0000  ....g7..........
+0160  0000 0000 0000 0000 0000 0000 0000 0000  ................
+0200  2000 0000 7c88 0b49 7c88 0b49 ec48 5872   ...|..I|..I.HXr
+0220  ca45 3a65 7c88 0b49 0000 0000 0000 0000  .E:e|..I........
+0240  0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+
+So now inode 12 which describes the previously empty file foo.txt points to data block 134, containng the top secret information. A normal user can access the file:
+
+torbjorn@torbjorn-VirtualBox:~/INF_113/oblig3$ ls
+bar.txt  baz_hl  baz_sl  baz.txt  dir1  foo.txt  lost+found
+
+torbjorn@torbjorn-VirtualBox:~/INF_113/oblig3$ cat foo.txt
+topphemmelig informasjon
+
