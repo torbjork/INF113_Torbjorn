@@ -1,0 +1,120 @@
+#include <stdio.h>  // getline
+#include <stdlib.h> // exit
+#include <string.h> // strtok
+#include <unistd.h> // execvp
+#include <sys/wait.h> //wait
+#include <fcntl.h> // fopen
+#include <signal.h> //signal
+#include <errno.h>  // errno
+
+
+#define LOG_LOCATION __FILE__, __LINE__, __func__ 
+#define LOG_FORMAT_STR "file: %s, line: %u, func: %s: "
+#define MAX_ARGS 256
+
+size_t n = 0;
+char *line = NULL;
+char *args[MAX_ARGS];
+int redirect = 0; // redirect flag
+char *filename = NULL; //redirection filename
+void parse_command_from_user()
+{
+    int rc = getline(&line, &n, stdin); //The command itself
+    if (rc < 0) // Close the shell at end-of-input
+        exit(0);
+	
+    int i = 0;
+    args[i++] = strtok(line, " \n"); //splits the command
+    
+    if(args[0]!= NULL && strcmp(args[0],"exit")==0){ 	//Non-empty string and
+    							//"exit" typed?
+	exit(0);					//			
+	}
+	
+    while (i < MAX_ARGS && args[i - 1] != NULL)
+        args[i++] = strtok(NULL, " \n");
+	
+	int j= 0;
+	
+	
+	while(args[j] != NULL){
+		if (strcmp(args[j], ">") == 0) { //operator found
+			redirect = 1; //redirect flag is set
+			filename = args[j+1]; //filename user stated
+			args[j] = NULL; //reset flag to exit while loop
+			break; //done all that's needed here...
+		}
+		j++;
+	}
+
+}
+
+int write_to_file(char * filename) {
+
+
+		int file = open(filename, O_CREAT|O_WRONLY, S_IRWXU);  
+		//int saved_stdout = dup(STDOUT_FILENO); //to keep original stdout
+		dup2(file, STDOUT_FILENO); //duplicate descriptor and refer to stdout
+				
+
+		fflush(stdout);
+		//dup2(saved_stdout, STDOUT_FILENO); //restore original
+    		//close(saved_stdout);
+    				
+
+    		//printf("This will be written to the console.\n");
+		close(file);	//close file descriptor
+		
+		
+		return 0;
+		
+	}
+
+void sig_handler_child(int signum){
+  //printf("Child : Received a signal from parent \n");
+  //pid_t pid;
+  //pid=getppid();
+  kill(getppid(),SIGINT);
+ // printf("Child process successfully killed");
+
+}
+
+int main() {
+
+
+ 
+ 
+
+  for(;;){
+
+
+    printf("> ");
+    signal(SIGINT,sig_handler_child);
+    parse_command_from_user();
+
+    int pid = fork(); 		// create a child process
+	
+    if (pid == 0) { 		// child process is here
+
+	if (redirect==1) {
+		
+		write_to_file(filename);
+
+		redirect=0;
+	
+	}
+
+	       execvp(args[0],args); 
+	    	   
+    	exit(EXIT_SUCCESS);	//exit child when finished
+   
+    }
+    
+    
+    else if (pid > 0) { 	// parent process is here
+      waitpid(pid, NULL,0); 		// wait for the child process to finish
+
+   	} 
+  }
+  return 0;
+}
