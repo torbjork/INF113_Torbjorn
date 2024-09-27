@@ -1,0 +1,51 @@
+Question 2b
+
+Without writing anything to the memory:
+torbjorn@torbjorn-VirtualBox:~/INF_113/Memory$ pmap -x $(pgrep mem2c)
+4640:   ./mem2c
+Address           Kbytes     RSS   Dirty Mode  Mapping
+0000000000400000       4       4       4 r---- mem2c
+0000000000401000     724     660     660 r-x-- mem2c
+00000000004b6000     168     128     128 r---- mem2c
+00000000004e1000      16      16      16 r---- mem2c
+00000000004e5000      12      12      12 rw--- mem2c
+00000000004e8000      20       8       8 rw---   [ anon ]
+00000000004ed000     136       8       8 rw---   [ anon ]
+00007ffff7ef8000    1028       4       4 rw---   [ anon ]	<--- Array uses 4 KB in memory
+00007ffff7ff9000      16       0       0 r----   [ anon ]
+00007ffff7ffd000       8       4       0 r-x--   [ anon ]
+00007ffffffde000     132      12      12 rw---   [ stack ]
+ffffffffff600000       4       0       0 --x--   [ anon ]
+---------------- ------- ------- ------- 
+total kB            2268     856     852
+
+
+After writing to the memory:
+torbjorn@torbjorn-VirtualBox:~/INF_113/Memory$ pmap -x $(pgrep mem2c)
+4653:   ./mem2c
+Address           Kbytes     RSS   Dirty Mode  Mapping
+0000000000400000       4       4       4 r---- mem2c
+0000000000401000     724     660     660 r-x-- mem2c
+00000000004b6000     168     128     128 r---- mem2c
+00000000004e1000      16      16      16 r---- mem2c
+00000000004e5000      12      12      12 rw--- mem2c
+00000000004e8000      20       8       8 rw---   [ anon ]
+00000000004ed000     136       8       8 rw---   [ anon ]
+00007ffff7ef8000    1028    1028    1028 rw---   [ anon ]	<--- Array uses 1028 KB in memory
+00007ffff7ff9000      16       0       0 r----   [ anon ]
+00007ffff7ffd000       8       4       0 r-x--   [ anon ]
+00007ffffffde000     132      12      12 rw---   [ stack ]
+ffffffffff600000       4       0       0 --x--   [ anon ]
+---------------- ------- ------- ------- 
+total kB            2268    1880    1876
+
+
+Size of char is 4 bytes, so the program is writing (1024 * 1024 *4) + 4 bytes = 4,194,308 bytes total. 
+Divide the total bytes by the number KB in the RSS column - 4 (because we added one more char to make sure we write to some number of pages plus one), and we get approximately 4,096 which is the real pagesize of 4096 bytes as displayed by getconf PAGESIZE:
+
+torbjorn@torbjorn-VirtualBox:~/INF_113/Memory$ getconf PAGESIZE
+4096
+
+Note that this calculation is not a reliable way to find the pagesize, as changes in RSS may depend on other factors besides the process' memory allocation activity.
+
+The system provides memory in units of pages, not bytes, so that is why the variable heap_var in my program is assigned a page (represented by 4 KB in the RSS column) at first. It is not possible to assign any less.

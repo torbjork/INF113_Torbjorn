@@ -1,0 +1,83 @@
+Question 2a 
+Output from pmap/pgrep:
+
+
+torbjorn@torbjorn-VirtualBox:~/INF_113/Memory$ pmap -x $(pgrep memory)
+29194:   ./memory
+Address           Kbytes     RSS   Dirty Mode  Mapping
+0000555555554000       4       4       0 r---- memory
+0000555555555000       4       4       0 r-x-- memory
+0000555555556000       4       4       0 r---- memory
+0000555555557000       4       4       4 r---- memory
+0000555555558000       4       4       4 rw--- memory
+0000555555559000     132       4       4 rw---   [ anon ]
+00007ffff7c00000     160     160       0 r---- libc.so.6
+00007ffff7c28000    1620     864       0 r-x-- libc.so.6
+00007ffff7dbd000     352     128       0 r---- libc.so.6
+00007ffff7e15000      16      16      16 r---- libc.so.6
+00007ffff7e19000       8       8       8 rw--- libc.so.6
+00007ffff7e1b000      52      20      20 rw---   [ anon ]
+00007ffff7e3b000    1480      12      12 rw---   [ anon ]
+00007ffff7fbb000       8       4       4 rw---   [ anon ]
+00007ffff7fbd000      16       0       0 r----   [ anon ]
+00007ffff7fc1000       8       4       0 r-x--   [ anon ]
+00007ffff7fc3000       8       8       0 r---- ld-linux-x86-64.so.2
+00007ffff7fc5000     168     168       0 r-x-- ld-linux-x86-64.so.2
+00007ffff7fef000      44      44       0 r---- ld-linux-x86-64.so.2
+00007ffff7ffb000       8       8       8 r---- ld-linux-x86-64.so.2
+00007ffff7ffd000       8       8       8 rw--- ld-linux-x86-64.so.2
+00007ffffffde000     132      12      12 rw---   [ stack ]
+ffffffffff600000       4       0       0 --x--   [ anon ]
+---------------- ------- ------- ------- 
+total kB            4244    1488     100
+torbjorn@torbjorn-VirtualBox:~/INF_113/Memory$ 
+
+When comparing the addresses from task 1 with what we get from pmap, we see that the address given by pmap is 16 bytes lower than the one provided by malloc:
+
+00007ffff7e3b010 = 140737352282128 (from malloc)
+00007ffff7e3b000 = 140737352282112 (from pmap)
+
+The first 16 bytes of the space allocated by malloc() is mainly used for alignment purposes. It can actually contribute to internal fragmentation if code is written without taking the alignment into account. This website illustrates how, by using an 8 byte allocation as an example: https://web.eecs.utk.edu/~huangj/cs360/360/notes/Fragmentation/lecture.html
+
+
+By storing the content of the addresses in the range ...000-010 and printing the content we get:
+Content of 0 address is: 0x0
+Content of 1 address is: 0x0
+Content of 2 address is: 0x0
+Content of 3 address is: 0x0
+Content of 4 address is: 0x0
+Content of 5 address is: 0x0
+Content of 6 address is: 0x0
+Content of 7 address is: 0x0
+Content of 8 address is: 0x2
+Content of 9 address is: 0x-16
+Content of a address is: 0x22
+Content of b address is: 0x0
+Content of c address is: 0x0
+Content of d address is: 0x0
+Content of e address is: 0x0
+Content of f address is: 0x0
+
+So as we can see the content of this area is (mostly) empty. I am not certain where the numbers stored in a couple of the addresses come from, however, the GNU documentation (https://www.gnu.org/software/libc/manual/html_node/Basic-Allocation.html) states that malloc() does not define the allocated memory block. So it is possible that the values are leftovers from some previous process.
+
+lldb gives us a similar result; this was after a restart of the virtual machine:
+
+(lldb) memory read -s4 -fu -c16 0x7ffff7e3b000
+0x7ffff7e3b000: 0
+0x7ffff7e3b004: 0
+0x7ffff7e3b008: 1503234
+0x7ffff7e3b00c: 0
+0x7ffff7e3b010: 0
+0x7ffff7e3b014: 0
+0x7ffff7e3b018: 0
+0x7ffff7e3b01c: 0
+0x7ffff7e3b020: 0
+0x7ffff7e3b024: 0
+0x7ffff7e3b028: 0
+0x7ffff7e3b02c: 0
+0x7ffff7e3b030: 0
+0x7ffff7e3b034: 0
+0x7ffff7e3b038: 0
+0x7ffff7e3b03c: 0
+
+
